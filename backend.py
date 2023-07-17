@@ -5,11 +5,20 @@ from flask_cors import CORS
 from PIL import Image
 import numpy as np
 import potrace
+import cv2
+import os
+import sys
+import traceback
+import multiprocessing
+
 
 app = Flask(__name__)
 CORS(app)
 
-FRAMES = 5258
+#FRAMES = 5258
+FRAME_DIR = 'frames'
+frame_latex = 0
+
 
 def png_to_np_array(filename):
     img = Image.open(filename)
@@ -30,35 +39,56 @@ def png_to_svg(filename):
 
 frame_coords = []
 
-for i in range(FRAMES):
+def gefd(frame_latexs):
+    for i in range(frame_latexs):
 
-    latex = []
+        latex = []
 
-    path = png_to_svg('frames/frame%d.png' % (i+1))
+        path = png_to_svg('frames/frame%d.png' % (i+1))
 
-    for curve in path.curves:
-        segments = curve.segments
-        start = curve.start_point
-        for segment in segments:
-            x0, y0 = start
-            if segment.is_corner:
-                x1, y1 = segment.c
-                x2, y2 = segment.end_point
-                latex.append('((1-t)%f+t%f,(1-t)%f+t%f)' % (x0, x1, y0, y1))
-                latex.append('((1-t)%f+t%f,(1-t)%f+t%f)' % (x1, x2, y1, y2))
-            else:
-                x1, y1 = segment.c1
-                x2, y2 = segment.c2
-                x3, y3 = segment.end_point
-                latex.append('((1-t)((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f))+t((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f)),\
-                (1-t)((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f))+t((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f)))' % \
-                (x0, x1, x1, x2, x1, x2, x2, x3, y0, y1, y1, y2, y1, y2, y2, y3))
-            start = segment.end_point
+        for curve in path.curves:
+            segments = curve.segments
+            start = curve.start_point
+            for segment in segments:
+                x0, y0 = start
+                if segment.is_corner:
+                    x1, y1 = segment.c
+                    x2, y2 = segment.end_point
+                    latex.append('((1-t)%f+t%f,(1-t)%f+t%f)' % (x0, x1, y0, y1))
+                    latex.append('((1-t)%f+t%f,(1-t)%f+t%f)' % (x1, x2, y1, y2))
+                else:
+                    x1, y1 = segment.c1
+                    x2, y2 = segment.c2
+                    x3, y3 = segment.end_point
+                    latex.append('((1-t)((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f))+t((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f)),\
+                    (1-t)((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f))+t((1-t)((1-t)%f+t%f)+t((1-t)%f+t%f)))' % \
+                    (x0, x1, x1, x2, x1, x2, x2, x3, y0, y1, y1, y2, y1, y2, y2, y3))
+                start = segment.end_point
 
-    frame_coords.append(latex)
+        frame_coords.append(latex)
 
 @app.route('/')
 def index():
     return json.dumps(frame_coords)
 
-app.run()
+@app.route('/app')
+def app_():
+    return render_template('index.html')
+
+if __name__ == '__main__':
+    frame_latex =  range(len(os.listdir(FRAME_DIR)))
+    with multiprocessing.Pool(processes = multiprocessing.cpu_count()) as pool:
+        print('Processing %d frames... Please wait for processing to finish before running on frontend\n' % len(os.listdir(FRAME_DIR)))
+
+    try:
+        frame_latex = pool.map(gefd, frame_latex)
+    except cv2.error as e:
+        print('[ERROR] Unable to process one or more files. Remember image files should be named <DIRECTORY>/frame<INDEX>.<EXTENSION> where INDEX represents the frame number starting from 1 and DIRECTORY and EXTENSION are defined by command line arguments (e.g. frames/frame1.png). Please check if:\n\tThe files exist\n\tThe files are all valid image files\n\tThe name of the files given is correct as per command line arguments\n\tThe program has the necessary permissions to read the file.\n\nUse backend.py -h for further documentation\n')            
+
+        print('-----------------------------')
+
+        print('Full error traceback:\n')
+        traceback.print_exc()
+        sys.exit(2)
+    
+    app.run()
