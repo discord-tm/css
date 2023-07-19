@@ -7,9 +7,6 @@ import numpy as np
 import potrace
 import cv2
 import os
-import sys
-import traceback
-import multiprocessing
 
 
 app = Flask(__name__)
@@ -17,7 +14,6 @@ CORS(app)
 
 #FRAMES = 5258
 FRAME_DIR = 'frames'
-frame_latex = 0
 
 
 def png_to_np_array(filename):
@@ -76,19 +72,7 @@ def app_():
     return render_template('index.html')
 
 if __name__ == '__main__':
-    frame_latex =  range(len(os.listdir(FRAME_DIR)))
-    with multiprocessing.Pool(processes = multiprocessing.cpu_count()) as pool:
-        print('Processing %d frames... Please wait for processing to finish before running on frontend\n' % len(os.listdir(FRAME_DIR)))
-
-    try:
-        frame_latex = pool.map(gefd, frame_latex)
-    except cv2.error as e:
-        print('[ERROR] Unable to process one or more files. Remember image files should be named <DIRECTORY>/frame<INDEX>.<EXTENSION> where INDEX represents the frame number starting from 1 and DIRECTORY and EXTENSION are defined by command line arguments (e.g. frames/frame1.png). Please check if:\n\tThe files exist\n\tThe files are all valid image files\n\tThe name of the files given is correct as per command line arguments\n\tThe program has the necessary permissions to read the file.\n\nUse backend.py -h for further documentation\n')            
-
-        print('-----------------------------')
-
-        print('Full error traceback:\n')
-        traceback.print_exc()
-        sys.exit(2)
+    frame_latex =  len(os.listdir(FRAME_DIR))
+    gefd(frame_latex)
     
     app.run()
